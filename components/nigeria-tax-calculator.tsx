@@ -1,10 +1,95 @@
 "use client"
 
 import type React from "react"
-import { useState, useMemo } from "react"
+import { useState, useMemo, memo, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Info } from "lucide-react"
+
+// Standalone, memoized DeductionToggle to avoid remounts/re-renders from parent updates
+const DeductionToggle = memo(({
+  label,
+  isEnabled,
+  fieldName,
+  helpText,
+  value,
+  onToggle,
+  onChange,
+  onFocus,
+  onBlur,
+  tooltipKey,
+  tooltipDescription,
+  activeTooltip,
+  setActiveTooltip,
+}: {
+  label: string
+  isEnabled: boolean
+  fieldName: string
+  helpText?: string
+  value: string | number
+  onToggle: () => void
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onFocus: () => void
+  onBlur: () => void
+  tooltipKey: string
+  tooltipDescription: string
+  activeTooltip: string | null
+  setActiveTooltip: (key: string | null) => void
+}) => {
+  return (
+    <div className="space-y-3 p-4 rounded-lg border border-border/50 hover:border-primary/30 transition-all duration-300 hover:bg-primary/5">
+      <div className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          id={tooltipKey}
+          checked={isEnabled}
+          onChange={onToggle}
+          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
+        />
+        <label htmlFor={tooltipKey} className="text-sm font-medium cursor-pointer flex items-center gap-2 flex-1">
+          {label}
+          <div className="relative inline-block">
+            <button
+              type="button"
+              onMouseEnter={() => setActiveTooltip(tooltipKey)}
+              onMouseLeave={() => setActiveTooltip(null)}
+              onClick={() => setActiveTooltip(activeTooltip === tooltipKey ? null : tooltipKey)}
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-all duration-200 hover:scale-110"
+              aria-label="More information"
+            >
+              <Info className="w-3 h-3" />
+            </button>
+            {activeTooltip === tooltipKey && (
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 w-48 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs rounded-lg p-3 z-50 pointer-events-none shadow-lg">
+                {tooltipDescription}
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-900 dark:border-t-slate-100"></div>
+              </div>
+            )}
+          </div>
+        </label>
+      </div>
+      {isEnabled && (
+        <div className="ml-7 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="relative">
+            <span className="absolute left-3 top-3 text-muted-foreground text-sm font-medium">₦</span>
+            <Input
+              type="text"
+              name={fieldName as string}
+              placeholder="0"
+              value={value}
+              onChange={onChange}
+              onFocus={onFocus}
+              onBlur={onBlur}
+              className="pl-7 text-sm bg-background/50 border-primary/20 focus:border-primary transition-colors"
+              inputMode="numeric"
+            />
+          </div>
+          {helpText && <p className="text-xs text-muted-foreground">{helpText}</p>}
+        </div>
+      )}
+    </div>
+  )
+})
 
 export function NigeriaTaxCalculator() {
   const [formData, setFormData] = useState({
@@ -27,6 +112,7 @@ export function NigeriaTaxCalculator() {
   })
 
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null)
+  const [focusedField, setFocusedField] = useState<keyof typeof formData | null>(null)
 
   // Tax calculation logic based on Nigeria Tax Act 2025
   const calculateTax = (income: number) => {
@@ -96,41 +182,45 @@ export function NigeriaTaxCalculator() {
     return cleaned.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     const cleanValue = value.replace(/,/g, "")
+
     setFormData((prev) => ({
       ...prev,
       [name]: cleanValue,
     }))
-  }
+  }, [])
 
   const getDisplayValue = (fieldName: keyof typeof formData): string => {
     const value = formData[fieldName]
     if (!value) return ""
+    // Avoid formatting while the field is focused to prevent cursor jumps and focus loss
+    if (focusedField === fieldName) return value
     return formatNumberInput(value)
   }
 
-  const handleToggleDeduction = (deductionKey: keyof typeof enabledDeductions) => {
-    setEnabledDeductions((prev) => ({
-      ...prev,
-      [deductionKey]: !prev[deductionKey],
-    }))
-    if (enabledDeductions[deductionKey]) {
-      const fieldMap = {
-        nhf: "nhfContribution",
-        nhis: "nhisContribution",
-        pension: "pensionContribution",
-        mortgage: "mortgageInterest",
-        lifeInsurance: "lifeInsurancePremium",
-        rent: "annualRentPaid",
+  const handleToggleDeduction = useCallback((deductionKey: keyof typeof enabledDeductions) => {
+    setEnabledDeductions((prev) => {
+      const wasEnabled = prev[deductionKey]
+      const next = { ...prev, [deductionKey]: !wasEnabled }
+      if (wasEnabled) {
+        const fieldMap = {
+          nhf: "nhfContribution",
+          nhis: "nhisContribution",
+          pension: "pensionContribution",
+          mortgage: "mortgageInterest",
+          lifeInsurance: "lifeInsurancePremium",
+          rent: "annualRentPaid",
+        } as const
+        setFormData((prevForm) => ({
+          ...prevForm,
+          [fieldMap[deductionKey]]: "",
+        }))
       }
-      setFormData((prev) => ({
-        ...prev,
-        [fieldMap[deductionKey]]: "",
-      }))
-    }
-  }
+      return next
+    })
+  }, [])
 
   const formatCurrency = (value: number) => {
     return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -145,77 +235,10 @@ export function NigeriaTaxCalculator() {
     rent: "Annual rent paid - 20% relief capped at ₦500,000",
   }
 
-  const InfoIcon = ({ tooltipKey }: { tooltipKey: string }) => {
-    const description = deductionDescriptions[tooltipKey as keyof typeof deductionDescriptions]
-    return (
-      <div className="relative inline-block">
-        <button
-          type="button"
-          onMouseEnter={() => setActiveTooltip(tooltipKey)}
-          onMouseLeave={() => setActiveTooltip(null)}
-          onClick={() => setActiveTooltip(activeTooltip === tooltipKey ? null : tooltipKey)}
-          className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-all duration-200 hover:scale-110"
-          aria-label="More information"
-        >
-          <Info className="w-3 h-3" />
-        </button>
-        {activeTooltip === tooltipKey && (
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 w-48 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs rounded-lg p-3 z-50 pointer-events-none shadow-lg">
-            {description}
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-900 dark:border-t-slate-100"></div>
-          </div>
-        )}
-      </div>
-    )
-  }
+  const onFocusField = useCallback((field: keyof typeof formData) => setFocusedField(field), [])
+  const onBlurField = useCallback(() => setFocusedField(null), [])
 
-  const DeductionToggle = ({
-    label,
-    deductionKey,
-    fieldName,
-    helpText,
-  }: {
-    label: string
-    deductionKey: keyof typeof enabledDeductions
-    fieldName: keyof typeof formData
-    helpText?: string
-  }) => {
-    const isEnabled = enabledDeductions[deductionKey]
-    return (
-      <div className="space-y-3 p-4 rounded-lg border border-border/50 hover:border-primary/30 transition-all duration-300 hover:bg-primary/5">
-        <div className="flex items-center gap-3">
-          <input
-            type="checkbox"
-            id={deductionKey}
-            checked={isEnabled}
-            onChange={() => handleToggleDeduction(deductionKey)}
-            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
-          />
-          <label htmlFor={deductionKey} className="text-sm font-medium cursor-pointer flex items-center gap-2 flex-1">
-            {label}
-            <InfoIcon tooltipKey={deductionKey} />
-          </label>
-        </div>
-        {isEnabled && (
-          <div className="ml-7 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-muted-foreground text-sm font-medium">₦</span>
-              <Input
-                type="text"
-                name={fieldName}
-                placeholder="0"
-                value={getDisplayValue(fieldName)}
-                onChange={handleInputChange}
-                className="pl-7 text-sm bg-background/50 border-primary/20 focus:border-primary transition-colors"
-                inputMode="numeric"
-              />
-            </div>
-            {helpText && <p className="text-xs text-muted-foreground">{helpText}</p>}
-          </div>
-        )}
-      </div>
-    )
-  }
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-accent/5 py-12 md:py-20 relative overflow-hidden">
@@ -224,7 +247,7 @@ export function NigeriaTaxCalculator() {
 
       <div className="container mx-auto max-w-6xl px-4 relative z-10">
         <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-balance">Nigeria Income Tax Calculator 2025</h1>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-balance">Personal Income Tax Calculator 2025</h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
             Calculate your tax liability based on the Nigeria Tax Act 2025. Enter your income and eligible deductions
             for instant results.
@@ -258,6 +281,8 @@ export function NigeriaTaxCalculator() {
                       placeholder="0"
                       value={getDisplayValue("totalIncome")}
                       onChange={handleInputChange}
+                      onFocus={() => setFocusedField("totalIncome")}
+                      onBlur={() => setFocusedField(null)}
                       className="pl-7 text-base bg-background/50 border-primary/20 focus:border-primary transition-colors"
                       inputMode="numeric"
                     />
@@ -268,24 +293,90 @@ export function NigeriaTaxCalculator() {
                   <p className="text-sm font-semibold mb-4 text-muted-foreground">Eligible Deductions (Optional)</p>
 
                   <div className="space-y-3">
-                    <DeductionToggle label="NHF Contribution" deductionKey="nhf" fieldName="nhfContribution" />
-                    <DeductionToggle label="NHIS Contribution" deductionKey="nhis" fieldName="nhisContribution" />
+                    <DeductionToggle 
+                      label="NHF Contribution" 
+                      isEnabled={enabledDeductions.nhf}
+                      fieldName="nhfContribution"
+                      value={getDisplayValue("nhfContribution")}
+                      onToggle={() => handleToggleDeduction("nhf")}
+                      onChange={handleInputChange}
+                      onFocus={() => onFocusField("nhfContribution")}
+                      onBlur={onBlurField}
+                      tooltipKey="nhf"
+                      tooltipDescription={deductionDescriptions.nhf}
+                      activeTooltip={activeTooltip}
+                      setActiveTooltip={setActiveTooltip}
+                    />
+                    <DeductionToggle 
+                      label="NHIS Contribution" 
+                      isEnabled={enabledDeductions.nhis}
+                      fieldName="nhisContribution"
+                      value={getDisplayValue("nhisContribution")}
+                      onToggle={() => handleToggleDeduction("nhis")}
+                      onChange={handleInputChange}
+                      onFocus={() => onFocusField("nhisContribution")}
+                      onBlur={onBlurField}
+                      tooltipKey="nhis"
+                      tooltipDescription={deductionDescriptions.nhis}
+                      activeTooltip={activeTooltip}
+                      setActiveTooltip={setActiveTooltip}
+                    />
                     <DeductionToggle
                       label="Pension Contribution"
-                      deductionKey="pension"
+                      isEnabled={enabledDeductions.pension}
                       fieldName="pensionContribution"
+                      value={getDisplayValue("pensionContribution")}
+                      onToggle={() => handleToggleDeduction("pension")}
+                      onChange={handleInputChange}
+                      onFocus={() => onFocusField("pensionContribution")}
+                      onBlur={onBlurField}
+                      tooltipKey="pension"
+                      tooltipDescription={deductionDescriptions.pension}
+                      activeTooltip={activeTooltip}
+                      setActiveTooltip={setActiveTooltip}
                     />
-                    <DeductionToggle label="Mortgage Interest" deductionKey="mortgage" fieldName="mortgageInterest" />
+                    <DeductionToggle 
+                      label="Mortgage Interest" 
+                      isEnabled={enabledDeductions.mortgage}
+                      fieldName="mortgageInterest"
+                      value={getDisplayValue("mortgageInterest")}
+                      onToggle={() => handleToggleDeduction("mortgage")}
+                      onChange={handleInputChange}
+                      onFocus={() => onFocusField("mortgageInterest")}
+                      onBlur={onBlurField}
+                      tooltipKey="mortgage"
+                      tooltipDescription={deductionDescriptions.mortgage}
+                      activeTooltip={activeTooltip}
+                      setActiveTooltip={setActiveTooltip}
+                    />
                     <DeductionToggle
                       label="Life Insurance Premium"
-                      deductionKey="lifeInsurance"
+                      isEnabled={enabledDeductions.lifeInsurance}
                       fieldName="lifeInsurancePremium"
+                      value={getDisplayValue("lifeInsurancePremium")}
+                      onToggle={() => handleToggleDeduction("lifeInsurance")}
+                      onChange={handleInputChange}
+                      onFocus={() => onFocusField("lifeInsurancePremium")}
+                      onBlur={onBlurField}
+                      tooltipKey="lifeInsurance"
+                      tooltipDescription={deductionDescriptions.lifeInsurance}
+                      activeTooltip={activeTooltip}
+                      setActiveTooltip={setActiveTooltip}
                     />
                     <DeductionToggle
                       label="Annual Rent Paid"
-                      deductionKey="rent"
+                      isEnabled={enabledDeductions.rent}
                       fieldName="annualRentPaid"
                       helpText="Relief: 20% of rent, max ₦500,000"
+                      value={getDisplayValue("annualRentPaid")}
+                      onToggle={() => handleToggleDeduction("rent")}
+                      onChange={handleInputChange}
+                      onFocus={() => onFocusField("annualRentPaid")}
+                      onBlur={onBlurField}
+                      tooltipKey="rent"
+                      tooltipDescription={deductionDescriptions.rent}
+                      activeTooltip={activeTooltip}
+                      setActiveTooltip={setActiveTooltip}
                     />
                   </div>
                 </div>
