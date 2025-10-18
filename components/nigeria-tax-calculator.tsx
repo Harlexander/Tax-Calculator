@@ -227,11 +227,11 @@ export function NigeriaTaxCalculator() {
   }
 
   const deductionDescriptions = {
-    nhf: "National Housing Fund contribution - mandatory savings for housing",
-    nhis: "National Health Insurance Scheme - healthcare coverage contribution",
-    pension: "Pension fund contributions - retirement savings",
-    mortgage: "Interest paid on mortgage loans for residential property",
-    lifeInsurance: "Life insurance premiums paid during the year",
+    nhf: "National Housing Fund contribution",
+    nhis: "National Health Insurance Scheme - Deductions from the staff salary",
+    pension: "Pension fund contributions - Employee's contribution only",
+    mortgage: "Interest paid on mortgage loans for 100% owner's occupied house only",
+    lifeInsurance: "Life insurance premiums paid in the previous year",
     rent: "Annual rent paid - 20% relief capped at ₦500,000",
   }
 
