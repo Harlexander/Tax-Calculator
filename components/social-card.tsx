@@ -1,30 +1,30 @@
 import React from 'react'
-import { Twitter, Linkedin, Github, Mail } from "lucide-react"
+import Image from 'next/image'
 
 const socialLinks = [
     {
       name: "Twitter",  
-      icon: Twitter,
       url: "https://x.com/PeachyBytes",
-      color: "hover:text-blue-400",
+      iconSrc: "/social/x.png",
+      bgClass: "ring-slate-800 hover:bg-slate-800 hover:ring-slate-600",
     },
     {
       name: "LinkedIn",
-      icon: Linkedin,
       url: "https://www.linkedin.com/in/dunkwu-alexander-4b38081b6/",
-      color: "hover:text-blue-600",
+      iconSrc: "/social/linkedin.png",
+      bgClass: "bg-sky-50 ring-sky-100 hover:bg-sky-100 hover:ring-sky-200",
     },
     {
       name: "GitHub",
-      icon: Github,
       url: "https://github.com/Harlexander",
-      color: "hover:text-gray-700",
+      iconSrc: "/social/github.png",
+      bgClass: "bg-gray-50 ring-gray-100 hover:bg-gray-100 hover:ring-gray-200",
     },
     {
       name: "Email",
-      icon: Mail,
       url: "mailto:dunkwualex6@gmail.com",
-      color: "hover:text-primary",
+      iconSrc: "/social/email.png",
+      bgClass: "bg-rose-50 ring-rose-100 hover:bg-rose-100 hover:ring-rose-200",
     },
   ]
 
@@ -40,17 +40,23 @@ const SocialCard = () => {
 
             <div className="flex gap-8 items-center justify-center">
               {socialLinks.map((social) => {
-                const Icon = social.icon
                 return (
                   <a
                     key={social.name}
                     href={social.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`p-3 rounded-full bg-muted hover:bg-primary/10 transition-all duration-300 ${social.color}`}
+                    className={`rounded-full ring-1 transition-all duration-300 ${social.bgClass}`}
                     aria-label={social.name}
                   >
-                    <Icon className="h-5 w-5" />
+                    <Image
+                      src={social.iconSrc}
+                      alt={`${social.name} logo`}
+                      width={68}
+                      height={68}
+                      className="h-12 w-12 object-contain rounded-full"
+                      priority={false}
+                    />
                   </a>
                 )
               })}
